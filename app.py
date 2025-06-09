@@ -1,10 +1,10 @@
-from flask import Flask, request, jsonify, session, redirect, url_for
+from flask import Flask, request, jsonify, session, redirect, url_for, send_file
 from flask_cors import CORS
 from datetime import datetime
 import os
 
 app = Flask(__name__)
-app.secret_key = "secreto_super_seguro_2025"  # Cambia esto por seguridad real
+app.secret_key = "secreto_super_seguro_2025"
 
 CORS(app, resources={r"/contact": {"origins": "https://distriibuidorayd.netlify.app"}})
 
@@ -26,7 +26,6 @@ def contact():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
-# 🧑‍💻 Formulario de login
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -39,7 +38,6 @@ def login():
                 <h3>Clave incorrecta</h3>
                 <a href="/login">Intentar de nuevo</a>
             '''
-
     return '''
         <form method="POST">
             <h2>Ingreso protegido</h2>
@@ -49,7 +47,6 @@ def login():
         </form>
     '''
 
-# 🔐 Ruta protegida
 @app.route('/ver-mensajes')
 def ver_mensajes():
     if not session.get('logueado'):
@@ -61,20 +58,29 @@ def ver_mensajes():
         return f'''
             <h3>Mensajes recibidos:</h3>
             <pre>{contenido}</pre>
-            <br><a href="/logout">Cerrar sesión</a>
+            <a href="/descargar-mensajes"><button>📥 Descargar mensajes</button></a><br><br>
+            <a href="/logout">Cerrar sesión</a>
         '''
     except FileNotFoundError:
         return "No hay mensajes aún.", 404
     except Exception as e:
         return f"Error: {e}", 500
 
-# 🔓 Cerrar sesión
+@app.route('/descargar-mensajes')
+def descargar_mensajes():
+    if not session.get('logueado'):
+        return redirect(url_for('login'))
+
+    filepath = "mensajes_contacto.txt"
+    if not os.path.exists(filepath):
+        return "Archivo no encontrado.", 404
+    return send_file(filepath, as_attachment=True)
+
 @app.route('/logout')
 def logout():
     session.clear()
     return redirect(url_for('login'))
 
-# 🔧 Para pruebas locales
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
