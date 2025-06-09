@@ -1,9 +1,12 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from datetime import datetime
+import os
 
 app = Flask(__name__)
-CORS(app)
+
+# Solo permite el origen de Netlify (ajusta si cambias de dominio)
+CORS(app, resources={r"/contact": {"origins": "https://distriibuidorayd.netlify.app"}})
 
 @app.route('/contact', methods=['POST'])
 def contact():
@@ -17,6 +20,7 @@ def contact():
         return jsonify({"status": "error", "message": "Faltan datos"}), 400
 
     try:
+        # Crear archivo si no existe y guardar el mensaje
         with open("mensajes_contacto.txt", "a", encoding="utf-8") as f:
             f.write(f"{fecha} | {nombre} | {correo} | {asunto} | {mensaje}\n")
 
@@ -24,5 +28,7 @@ def contact():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
+# Este bloque es solo para pruebas locales. Render usará gunicorn.
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
