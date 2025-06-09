@@ -1,11 +1,11 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, session, redirect, url_for
 from flask_cors import CORS
 from datetime import datetime
 import os
 
 app = Flask(__name__)
+app.secret_key = "secreto_super_seguro_2025"  # Cambia esto por seguridad real
 
-# Permitir solicitudes desde tu frontend en Netlify
 CORS(app, resources={r"/contact": {"origins": "https://distriibuidorayd.netlify.app"}})
 
 @app.route('/contact', methods=['POST'])
@@ -26,19 +26,55 @@ def contact():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
-# ✅ Ruta temporal para mostrar los mensajes guardados (solo para el profesor)
-@app.route('/ver-mensajes', methods=['GET'])
+# 🧑‍💻 Formulario de login
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        clave = request.form.get('clave')
+        if clave == 'admin123':
+            session['logueado'] = True
+            return redirect(url_for('ver_mensajes'))
+        else:
+            return '''
+                <h3>Clave incorrecta</h3>
+                <a href="/login">Intentar de nuevo</a>
+            '''
+
+    return '''
+        <form method="POST">
+            <h2>Ingreso protegido</h2>
+            <label>Clave de acceso:</label><br>
+            <input type="password" name="clave"><br><br>
+            <button type="submit">Entrar</button>
+        </form>
+    '''
+
+# 🔐 Ruta protegida
+@app.route('/ver-mensajes')
 def ver_mensajes():
+    if not session.get('logueado'):
+        return redirect(url_for('login'))
+
     try:
         with open("mensajes_contacto.txt", "r", encoding="utf-8") as f:
             contenido = f.read()
-        return f"<pre>{contenido}</pre>"
+        return f'''
+            <h3>Mensajes recibidos:</h3>
+            <pre>{contenido}</pre>
+            <br><a href="/logout">Cerrar sesión</a>
+        '''
     except FileNotFoundError:
         return "No hay mensajes aún.", 404
     except Exception as e:
-        return f"Error al leer los mensajes: {e}", 500
+        return f"Error: {e}", 500
 
-# Esto es solo para pruebas locales. Render usa gunicorn.
+# 🔓 Cerrar sesión
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
+# 🔧 Para pruebas locales
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
