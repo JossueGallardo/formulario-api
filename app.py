@@ -5,7 +5,7 @@ import os
 
 app = Flask(__name__)
 
-# Solo permite el origen de Netlify (ajusta si cambias de dominio)
+# Permitir solicitudes desde tu frontend en Netlify
 CORS(app, resources={r"/contact": {"origins": "https://distriibuidorayd.netlify.app"}})
 
 @app.route('/contact', methods=['POST'])
@@ -20,15 +20,25 @@ def contact():
         return jsonify({"status": "error", "message": "Faltan datos"}), 400
 
     try:
-        # Crear archivo si no existe y guardar el mensaje
         with open("mensajes_contacto.txt", "a", encoding="utf-8") as f:
             f.write(f"{fecha} | {nombre} | {correo} | {asunto} | {mensaje}\n")
-
         return jsonify({"status": "ok"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
-# Este bloque es solo para pruebas locales. Render usará gunicorn.
+# ✅ Ruta temporal para mostrar los mensajes guardados (solo para el profesor)
+@app.route('/ver-mensajes', methods=['GET'])
+def ver_mensajes():
+    try:
+        with open("mensajes_contacto.txt", "r", encoding="utf-8") as f:
+            contenido = f.read()
+        return f"<pre>{contenido}</pre>"
+    except FileNotFoundError:
+        return "No hay mensajes aún.", 404
+    except Exception as e:
+        return f"Error al leer los mensajes: {e}", 500
+
+# Esto es solo para pruebas locales. Render usa gunicorn.
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
