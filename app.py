@@ -1,12 +1,13 @@
-from flask import Flask, request, jsonify, session, redirect, url_for, send_file
+from flask import Flask, request, jsonify, session, redirect, url_for, send_file, Response
 from flask_cors import CORS
 from datetime import datetime
 import os
 import sqlite3
+import csv
+import io
 
 app = Flask(__name__)
 app.secret_key = "secreto_super_seguro_2025"
-
 CORS(app, resources={r"/contact": {"origins": "https://distriibuidorayd.netlify.app"}})
 
 # ---------- Inicializar base de datos SQLite ----------
@@ -41,11 +42,9 @@ def contact():
         return jsonify({"status": "error", "message": "Faltan datos"}), 400
 
     try:
-        # Guardar en archivo .txt
         with open("mensajes_contacto.txt", "a", encoding="utf-8") as f:
             f.write(f"{fecha} | {nombre} | {correo} | {asunto} | {mensaje}\n")
 
-        # Guardar en base de datos SQLite
         conn = sqlite3.connect('mensajes.db')
         cursor = conn.cursor()
         cursor.execute('''
@@ -68,10 +67,7 @@ def login():
             session['logueado'] = True
             return redirect(url_for('ver_mensajes'))
         else:
-            return '''
-                <h3>Clave incorrecta</h3>
-                <a href="/login">Intentar de nuevo</a>
-            '''
+            return '<h3>Clave incorrecta</h3><a href="/login">Intentar de nuevo</a>'
     return '''
         <form method="POST">
             <h2>Ingreso protegido</h2>
@@ -95,12 +91,22 @@ def ver_mensajes():
         conn.close()
 
         html = "<h3>Mensajes recibidos:</h3><ul>"
-        for msg in mensajes:
-            fecha, nombre, correo, asunto, mensaje = msg
-            html += f"<li><b>{fecha}</b> | <b>{nombre}</b> | {correo} | {asunto} <br> {mensaje}</li><hr>"
+        for fecha, nombre, correo, asunto, mensaje in mensajes:
+            html += f"""
+            <li>
+                <strong>Hora:</strong> {fecha}<br>
+                <strong>Nombre:</strong> {nombre}<br>
+                <strong>Correo:</strong> {correo}<br>
+                <strong>Asunto:</strong> {asunto}<br>
+                <strong>Mensaje:</strong><br>{mensaje}
+            </li><hr>
+            """
         html += "</ul>"
-        html += '<a href="/descargar-mensajes"><button>📥 Descargar mensajes</button></a><br><br>'
-        html += '<a href="/logout">Cerrar sesión</a>'
+        html += '''
+            <a href="/descargar-mensajes"><button>📥 Descargar mensajes (TXT)</button></a>
+            <a href="/descargar-sql"><button>📄 Descargar mensajes (SQL - CSV)</button></a><br><br>
+            <a href="/logout">Cerrar sesión</a>
+        '''
         return html
 
     except Exception as e:
@@ -116,6 +122,31 @@ def descargar_mensajes():
     if not os.path.exists(filepath):
         return "Archivo no encontrado.", 404
     return send_file(filepath, as_attachment=True)
+
+# ---------- Descargar mensajes desde SQLite como CSV ----------
+@app.route('/descargar-sql')
+def descargar_sql():
+    if not session.get('logueado'):
+        return redirect(url_for('login'))
+
+    try:
+        conn = sqlite3.connect('mensajes.db')
+        cursor = conn.cursor()
+        cursor.execute('SELECT fecha, nombre, correo, asunto, mensaje FROM mensajes ORDER BY id DESC')
+        mensajes = cursor.fetchall()
+        conn.close()
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['Fecha', 'Nombre', 'Correo', 'Asunto', 'Mensaje'])
+        writer.writerows(mensajes)
+        output.seek(0)
+
+        return Response(output, mimetype='text/csv',
+                        headers={'Content-Disposition': 'attachment; filename=mensajes_sql.csv'})
+
+    except Exception as e:
+        return f"Error al generar CSV: {e}", 500
 
 # ---------- Cerrar sesión ----------
 @app.route('/logout')
